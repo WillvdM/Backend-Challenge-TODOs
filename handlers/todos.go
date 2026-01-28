@@ -3,7 +3,8 @@ package handlers
 import (
     "github.com/gofiber/fiber/v2"
     "github.com/WillvdM/Backend-Challenge-TODOs/models"
-    //  
+     "github.com/WillvdM/Backend-Challenge-TODOs/db"
+
 
 )
 
@@ -19,25 +20,56 @@ func CreateTodo (c *fiber.Ctx) error {
         })
     }
 
-    // Input is returned currently as confirmation 
-    return c.JSON(fiber.Map {
-        "message" : "Todo created successfully",
-        "todo":    input,
+        var id int
+    err := db.DB.QueryRow(
+        "INSERT INTO todos (title, completed) VALUES ($1, $2) RETURNING id",
+        input.Title,
+        input.Completed,
+    ).Scan (&id)
+
+        if err != nil {
+        return c.Status(500).JSON(fiber.Map{
+            "error": err.Error(),
     })
 }
+    
+    // Return created todo
+    todo := map[string]interface{} {
+        "id": id,
+        "title": input.Title,
+        "completed": input.Completed,
+    }
+    return c.Status(201).JSON(todo)
+}
+
+
 
 // GetTodoByID handles GET /todos/:id
-func GetTodoByID(c *fiber.Ctx) error {
+func GetTodos(c *fiber.Ctx) error {
+    rows, err :=db.DB.Query("SELECT id , title, completed FROM todos ")
+   if err != nil {
+    return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+   }
+   defer rows.Close()
 
-    // Echoes id parameter
-    id :=c.Params("id")
+   // Collect the results
+   todos := []map[string]interface{}{}
+   for rows.Next() {
+    var id int
+    var title string
+    var completed bool
 
-    return c.JSON(fiber.Map {
+    err := rows.Scan(&id, &title, &completed)
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+    }
+    todo := map[string]interface{} {
         "id": id,
-    })
+        "title": title,
+        "completed": completed,
+    }
+    todos = append (todos, todo)
+   }
+   return c.JSON(todos)
 }
 
-// Delete TODO handles DELETE /todos/:id
-func DeleteTodo (c *fiber.Ctx) error {
-    return c.SendStatus(204)
-}
