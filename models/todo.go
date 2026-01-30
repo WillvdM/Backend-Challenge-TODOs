@@ -1,11 +1,11 @@
 //Seperate request data from DB data
 
-package models 
+package models
+
 import "time"
 
 type TodoInput struct {
-    Title       string `json:"title"`
-    Description string `json:"description"`
-    Completed   bool   `json:"completed"`
-    CreatedAt time.Time `json: "created at"`
+	Title     string    `json:"title"`
+	Completed bool      `json:"completed"`
+	CreatedAt time.Time `json:"created at"`
 }

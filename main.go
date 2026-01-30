@@ -7,7 +7,6 @@ import (
 	"github.com/WillvdM/Backend-Challenge-TODOs/db"
 )
 
-
 func main() {
 
 	//Create a new Fiber instance
