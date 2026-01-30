@@ -12,4 +12,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// GET /todos
 	app.Get("/todos", handlers.GetTodos)
+
+	// DELETE /todos
+	app.Delete("/todos/:id", handlers.DeleteTodo)
 }

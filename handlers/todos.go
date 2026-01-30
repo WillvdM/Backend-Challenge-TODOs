@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strconv"
+
 	"github.com/WillvdM/Backend-Challenge-TODOs/db"
 	"github.com/WillvdM/Backend-Challenge-TODOs/models"
 	"github.com/gofiber/fiber/v2"
@@ -75,4 +77,40 @@ func GetTodos(c *fiber.Ctx) error {
 
 	// All todos are returned
 	return c.JSON(todos)
+}
+
+func DeleteTodo(c *fiber.Ctx) error {
+	// Get URL ID
+	idParam := c.Params("id")
+
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Invalid TODO id",
+		})
+	}
+
+	result, err := db.DB.Exec("DELETE FROM todos WHERE id=$1", id)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if rowsAffected == 0 {
+		return c.Status(404).JSON(fiber.Map{
+			"error": "TODO not found",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "TODO deleted successfully",
+	})
 }
