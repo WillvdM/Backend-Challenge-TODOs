@@ -79,6 +79,49 @@ func GetTodos(c *fiber.Ctx) error {
 	return c.JSON(todos)
 }
 
+func GetTodoByID(c *fiber.Ctx) error {
+
+	// Get URL id
+	idParam := c.Params("id")
+
+	// Convert from string to integer
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+
+		// Return error 400 if the TODO id is not a valid integer
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Invalid TODO id",
+		})
+	}
+
+	// Temporary struct for the database results
+	var todo struct {
+		ID        int
+		Title     string
+		Completed bool
+	}
+
+	// The database is queried for the todo with the given id
+	err = db.DB.QueryRow(
+		"SELECT id, title, completed FROM TODOS WHERE id = $1",
+		id,
+	).Scan(&todo.ID, &todo.Title, &todo.Completed)
+	if err != nil {
+
+		// Return error 404 if no TODO with the given ID exists
+		return c.Status(404).JSON(fiber.Map{
+			"error": "TDOO not found",
+		})
+	}
+
+	// Return the found todos as a JSON
+	return c.JSON(fiber.Map{
+		"id":        todo.ID,
+		"title":     todo.Title,
+		"completed": todo.Completed,
+	})
+}
+
 func DeleteTodo(c *fiber.Ctx) error {
 	// Get URL ID
 	idParam := c.Params("id")
