@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/WillvdM/Backend-Challenge-TODOs/config"
 	"github.com/WillvdM/Backend-Challenge-TODOs/db"
 	"github.com/WillvdM/Backend-Challenge-TODOs/models"
 	"github.com/gofiber/fiber/v2"
@@ -148,30 +150,38 @@ func GetTodoByID(c *fiber.Ctx) error {
 
 func DeleteTodo(c *fiber.Ctx) error {
 	// Get URL ID
-	idParam := c.Params("id")
-
-	id, err := strconv.Atoi(idParam)
+	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid TODO id",
 		})
 	}
 
-	result, err := db.DB.Exec("DELETE FROM todos WHERE id=$1", id)
+	var result sql.Result
+
+	switch config.Config.DeletionMode {
+	case config.DeletionSoft:
+		result, err = db.DB.Exec(
+			"Update todos SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL", id,
+		)
+	case config.DeletionHard:
+		result, err = db.DB.Exec(
+			"DELETE FROM todos WHERE id = $1", id,
+		)
+	default:
+		result, err = db.DB.Exec(
+			"DELETE FROM todos WHERE id = $1", id,
+		)
+	}
+
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	if rowsAffected == 0 {
+	rows, err := result.RowsAffected()
+	if rows == 0 {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "TODO not found",
 		})
@@ -179,6 +189,7 @@ func DeleteTodo(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": "TODO deleted successfully",
+		"mode":    config.Config.DeletionMode,
 	})
 }
 

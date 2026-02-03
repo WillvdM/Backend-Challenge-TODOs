@@ -1,0 +1,5 @@
+# Not contain sensitive info (config specific things)
+# config-template contains sensitive info
+
+deletion_mode: SOFT
+deletion_mode: HARD

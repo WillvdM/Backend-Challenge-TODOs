@@ -3,12 +3,14 @@ package main
 import (
 	"log"
 
+	"github.com/WillvdM/Backend-Challenge-TODOs/config"
 	"github.com/WillvdM/Backend-Challenge-TODOs/db"
 	"github.com/WillvdM/Backend-Challenge-TODOs/routes"
 	"github.com/gofiber/fiber/v2"
 )
 
 func main() {
+	config.LoadConfig()
 
 	//Create a new Fiber instance
 	app := fiber.New()

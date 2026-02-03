@@ -8,4 +8,5 @@ type TodoInput struct {
 	Title     string    `json:"title"`
 	Completed bool      `json:"completed"`
 	CreatedAt time.Time `json:"created at"`
+	// Investigate omitting empty default values in JSON
 }
