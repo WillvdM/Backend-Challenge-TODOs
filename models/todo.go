@@ -5,8 +5,7 @@ package models
 import "time"
 
 type TodoInput struct {
-	Title     string    `json:"title"`
-	Completed bool      `json:"completed"`
-	CreatedAt time.Time `json:"created at"`
-	// Investigate omitting empty default values in JSON
+	Title     string    `json:"title,omitempty"` // Leave field if it is empty
+	Completed bool      `json:"completed,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }

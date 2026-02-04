@@ -13,8 +13,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// [{Title,Completed},{Title,Completed}]
-
 // CreateTodo handles POST /todos. Receives JSON input, inserts a new todo into the database, returns the created todo with ID it generated.
 func CreateTodo(c *fiber.Ctx) error {
 	var input []models.TodoInput
@@ -26,10 +24,14 @@ func CreateTodo(c *fiber.Ctx) error {
 		})
 	}
 
+	// NB!!!! Still need to change this
 	// Will still do research regarding if this code is the best for inserting multiple todos at once, code was copied
+
 	var examples []string
-	var values []interface{} // Will do research if interface is the best method
-	counter := 1             //Magic number?
+	var values []interface{}
+	/* Will do research if interface is the best method
+	//Magic number? */
+	counter := 1
 
 	for _, todo := range input {
 		example := fmt.Sprintf("($%d,$%d)", counter, counter+1)
@@ -82,7 +84,7 @@ func GetTodos(c *fiber.Ctx) error {
 		var title string
 		var completed bool
 
-		// Scan the row values
+		// Scan the row values and return an error if the rows are unchganged
 		err := rows.Scan(&id, &title, &completed)
 		if err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -149,7 +151,8 @@ func GetTodoByID(c *fiber.Ctx) error {
 }
 
 func DeleteTodo(c *fiber.Ctx) error {
-	// Get URL ID
+
+	// Extract and validate TODO ID from the URL
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
@@ -157,29 +160,45 @@ func DeleteTodo(c *fiber.Ctx) error {
 		})
 	}
 
+	// TODO cannot be deleted if the conifguration was not loaded properly
+	if !config.Loaded {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Deletion config not loaded",
+		})
+	}
+
 	var result sql.Result
 
+	// The deletion logic is executed, based on the config
 	switch config.Config.DeletionMode {
+
+	// Mark row as deleted without removing it
 	case config.DeletionSoft:
 		result, err = db.DB.Exec(
 			"Update todos SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL", id,
 		)
+
+	// Permanently remove the row
 	case config.DeletionHard:
 		result, err = db.DB.Exec(
 			"DELETE FROM todos WHERE id = $1", id,
 		)
+
+		// Safety: Refuse to delete anything if no deletion mode is specified
 	default:
-		result, err = db.DB.Exec(
-			"DELETE FROM todos WHERE id = $1", id,
-		)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Deletion mode is invalid",
+		})
 	}
 
+	// Handle db execution errors
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
+	// Check affected rows
 	rows, err := result.RowsAffected()
 	if rows == 0 {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
@@ -187,6 +206,7 @@ func DeleteTodo(c *fiber.Ctx) error {
 		})
 	}
 
+	// Success response
 	return c.JSON(fiber.Map{
 		"message": "TODO deleted successfully",
 		"mode":    config.Config.DeletionMode,
@@ -195,9 +215,12 @@ func DeleteTodo(c *fiber.Ctx) error {
 
 // Update TODO by ID
 func UpdateTodo(c *fiber.Ctx) error {
+
+	// Read 'id' path parameter from the URL
 	idParam := c.Params("id")
 
-	// Convert to string?
+	// Convert the ID from string to integer
+	// If conversion fails, ID is invalid
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
@@ -213,6 +236,7 @@ func UpdateTodo(c *fiber.Ctx) error {
 		})
 	}
 
+	// SQL UPDATE statement is executed, updates given TODOs
 	result, err := db.DB.Exec(
 		"UPDATE TODOs SET title = $1, completed = $2 WHERE id = $3",
 		input.Title,
@@ -226,6 +250,7 @@ func UpdateTodo(c *fiber.Ctx) error {
 		})
 	}
 
+	// Check affected rows. If not affected rows, it means the TODO does not exist
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -233,14 +258,14 @@ func UpdateTodo(c *fiber.Ctx) error {
 		})
 	}
 
-	// If the ID is not found, return this error
+	// If the ID is not found, return not found error
 	if rowsAffected == 0 {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "TODO not found",
 		})
 	}
 
-	// Updated TODO is returned
+	// Updated TODO is returned for confirmation
 	return c.JSON(fiber.Map{
 		"id":        "id",
 		"title":     input.Title,
