@@ -160,13 +160,6 @@ func DeleteTodo(c *fiber.Ctx) error {
 		})
 	}
 
-	// TODO cannot be deleted if the conifguration was not loaded properly
-	if !config.Loaded {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Deletion config not loaded",
-		})
-	}
-
 	var result sql.Result
 
 	// The deletion logic is executed, based on the config
@@ -209,7 +202,6 @@ func DeleteTodo(c *fiber.Ctx) error {
 	// Success response
 	return c.JSON(fiber.Map{
 		"message": "TODO deleted successfully",
-		"mode":    config.Config.DeletionMode,
 	})
 }
 

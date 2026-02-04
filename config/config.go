@@ -39,10 +39,6 @@ type AppConfig struct {
 
 var Config AppConfig
 
-// Loaded indicates whether `config.yaml` was successfully read and parsed
-
-var Loaded bool
-
 //validDeletionModes defines the allowed enum-like values for the `deletion_mode` configuration.
 
 var validDeletionModes = map[DeletionMode]bool{
@@ -64,7 +60,6 @@ func LoadConfig() {
 	Config = AppConfig{
 		DeletionMode: DeletionSoft,
 	}
-	Loaded = false
 
 	// Attempt to read config.yaml
 	file, err := os.ReadFile("config.yaml")
@@ -85,7 +80,4 @@ func LoadConfig() {
 		Config.DeletionMode = DeletionSoft
 		return
 	}
-
-	// Configuration successfully loaded and validated
-	Loaded = true
 }
