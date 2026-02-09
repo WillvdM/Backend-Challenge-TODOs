@@ -1,32 +1,34 @@
-//Seperate request data from DB data
-
 package models
 
 import "time"
 
-// Represents data that is expected to be entered when creating or updating a todo
-type TodoInput struct {
-	Title     string     `json:"title,omitempty"` // Leave field if it is empty
+// Todo represents the core TODO entity.
+// This struct is embedded in other models.
+// Todo contains fields shared across input, database, and output.
+type Todo struct {
+	Title     string     `json:"title,omitempty"`
 	Completed bool       `json:"completed,omitempty"`
-	CreatedAt time.Time  `json:"created_at"` // Not shown as a field
 	Assignee  string     `json:"assignee"`
 	DueDate   *time.Time `json:"due_date,omitempty"`
 }
 
-// This represents a todo item in API responses.
-// The struct field are serialized to JSON when it is returned.
-// Serialization: process of converting a data structure or object into a format that can be stored or transmitted and later deconstructed.
-type TodoResponse struct {
-	ID          int        `json:"id"`
-	Title       string     `json:"title"`
-	Completed   bool       `json:"completed"`
-	Assignee    string     `json:"assignee"`
-	DueDate     *time.Time `json:"due_date,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
+// TodoInput represents the payload used when creating or updating a todo.
+// It embeds Todo to reuse common fields.
+type TodoInput struct {
+	Todo
+	CreatedAt time.Time `json:"created_at,omitempty"`
 }
 
-// Represents a paginated list of todos returned by the API
-// Wraps todo data together with pagination metadata
+// TodoResponse represents a todo returned by the API.
+// TodoResponse includes additional fields that are only relevant in responses.
+type TodoResponse struct {
+	ID          int        `json:"id"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Todo
+}
+
+// TodosResponses represent a paginated list of todos.
+// TodosRespones is used when returning mulitple todos from the API.
 type TodosResponse struct {
 	Todos       []TodoResponse `json:"todos"`
 	CurrentPage int            `json:"current_page"`

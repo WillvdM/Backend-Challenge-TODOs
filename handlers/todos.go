@@ -316,9 +316,8 @@ func UpdateTodo(c *fiber.Ctx) error {
 
 	// Define a struct for parsing the request body JSON.
 	var input struct {
-		Title     string  `json:"title"`
-		Completed bool    `json:"completed"`
-		DueDate   *string `json:"due_date"`
+		models.Todo
+		DueDate *string `json:"due_date"`
 	}
 
 	// Parse the request body JSON into the input struct.
