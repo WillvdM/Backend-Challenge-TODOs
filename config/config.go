@@ -33,6 +33,8 @@ Values are loaded from `config.yaml`.
 */
 type AppConfig struct {
 	DeletionMode DeletionMode `yaml:"deletion_mode"`
+	DatabaseURL  string       `yaml:"host = localhost port = 5432 user = postgres password = postgres dbname = TODOs sslmode = disable"`
+	SortFields   []string     `yaml:"soft_fields"`
 }
 
 // Config is the globally accessible configuration instance.

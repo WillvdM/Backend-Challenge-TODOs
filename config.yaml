@@ -2,3 +2,10 @@
 # config-template contains sensitive info
 
 deletion_mode: SOFT
+sort_fields:
+	- id
+	- title
+	- completed
+	- assignee
+	- due_date
+	- created_at

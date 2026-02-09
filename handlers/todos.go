@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -102,101 +103,93 @@ func CreateTodos(c *fiber.Ctx) error {
 // Fetches list of todos and returns them as JSON to the client.
 // Query the db, process each row in the TodoResponse struct, collect them in a slice, the return results as JSON
 func GetTodos(c *fiber.Ctx) error {
-
-	// Retrieve a paginated list of todos from the database, return them as JSON.
-	// - offset (optional, default 0): number of records to skip
-	offset, _ := strconv.Atoi(c.Query("offset", "0")) // Coneverts from strings to integers
-	// - limit  (optional, default size is 10, max is 100): number of records to return
+	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
 
-	// Validate the parameters, offset should not be negative
 	if offset < 0 {
 		offset = 0
 	}
-
-	// Limit should be between 1 and 100, avoids excessive queries
 	if limit < 1 || limit > 100 {
 		limit = 10
 	}
 
-	// Execute query with paramaterized inputs, prevents SQL injection
-	// Retrive all the values and order them by id
-	rows, err := db.DB.Query("SELECT id, title, completed, assignee, due_date, completed_at FROM todos ORDER BY id LIMIT $1 OFFSET $2", limit, offset) // Paramterized SQL query
-	if err != nil {
+	// --- Sorting ---
+	sortField := c.Query("sort", "id")
+	order := strings.ToLower(c.Query("order", "asc"))
 
-		// Return error if the query fails, with the error in JSON format
+	allowed := false
+	for _, f := range config.Config.SortFields {
+		if f == sortField {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		sortField = "id"
+	}
+
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, title, completed, assignee, due_date, completed_at
+		FROM todos
+		ORDER BY %s %s
+		LIMIT $1 OFFSET $2
+	`, sortField, order)
+
+	rows, err := db.DB.Query(query, limit, offset)
+	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
+	defer rows.Close() // <- now reachable
 
-	// Ensure the rows are closed when function returns.
-	defer rows.Close()
-
-	var totalCount int
-	err = db.DB.QueryRow("SELECT COUNT(*) FROM todos").Scan(&totalCount)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	// Calculate current page using offset and limit (1-based indexing).
-	// Total number of pages calculated by using ceiling division.
-	currentPage := (offset / limit) + 1
-
-	// Total number of pages calculated by using ceiling division.
-	totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
-
-	// Initializes and collects the results into an empty slice.
 	todos := []models.TodoResponse{}
 
-	// Each row is processed and appended to the response slice.
 	for rows.Next() {
 		var todo models.TodoResponse
-
-		// Scan the row values into the TodoResponse struct and return an error if the rows are unchganged (scanning fails).
 		err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.Assignee, &todo.DueDate, &todo.CompletedAt)
 		if err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-
-		// Adds elements to the end of a slice, if underlying array capacity is exceeded (dynamically resizing collection).
 		todos = append(todos, todo)
 	}
 
-	// Check errors encountered during the iteration proccess.
 	if err := rows.Err(); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	// Todos and metadate are wrapped into a single response object.
+	var totalCount int
+	err = db.DB.QueryRow("SELECT COUNT(*) FROM todos").Scan(&totalCount)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	currentPage := (offset / limit) + 1
+	totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
+
 	response := models.TodosResponse{
 		Todos:       todos,
 		CurrentPage: currentPage,
 		TotalPages:  totalPages,
 	}
 
-	// The above response is marshalled into prettyJSON, making it look neater.
 	data, err := json.MarshalIndent(response, "", " ")
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Set the HeaderContentType, JSON data is sent as an HTTP response.
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-	// All todos are returned.
 	return c.Send(data)
 }
 
-// Referenced in routes/routes.go
-// Fetches a todo by an ID that must be specified
 func GetTodoByID(c *fiber.Ctx) error {
 
 	// Get URL id
