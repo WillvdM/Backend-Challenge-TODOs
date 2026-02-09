@@ -3,11 +3,11 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/WillvdM/Backend-Challenge-TODOs/config"
 	"github.com/WillvdM/Backend-Challenge-TODOs/db"
@@ -15,81 +15,91 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// This represents a todo item in API responses.
-// The struct field are serialized to JSON when it is returned.
-// Serialization: process of converting a data structure or object into a format that can be stored or transmitted and later deconstructed.
-type TodoResponse struct {
-	ID        int    `json:"id"`
-	Title     string `json:"title"`
-	Completed bool   `json:"completed"`
-}
+// CreateTodos handles CREATE /todos
+// Referenced in routes/routes.go
+func CreateTodos(c *fiber.Ctx) error {
+	// Define the input structure request body
+	var inputs []struct {
+		Title     string  `json:"title"`
+		Completed bool    `json:"completed"`
+		Assignee  string  `json:"assignee"`
+		DueDate   *string `json:"due_date"`
+	}
 
-// Used in routes/routes.go
-func CreateTodo(c *fiber.Ctx) error {
-
-	// Inserts a new todo into the database, returns the created todo with ID it generated.
-	var input []models.TodoInput
-
-	// JSON body is parsed into TodoInput structure, return an error if invalid.
-	if err := c.BodyParser(&input); err != nil {
+	// Parse the JSON body into the input struct
+	if err := c.BodyParser(&inputs); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	// NB!!!! Still need to change this.
-	// Will still do research regarding if this code is the best for inserting multiple todos at once, code was copied.
-	var examples []string
+	// Prepare a slice to hold the inserted todos.
+	inserted := []map[string]interface{}{}
 
-	// Will do research if interface is the best method.
-	var values []interface{}
+	// Loop through each input todo.
+	for _, input := range inputs {
 
-	//Magic number?
-	counter := 1
+		// Validate if the required field is present
+		if strings.TrimSpace(input.Assignee) == "" {
 
-	// for loop, copied but not researched.
-	for _, todo := range input {
-		example := fmt.Sprintf("($%d,$%d)", counter, counter+1)
-		counter += 2 //Magic number?
-		examples = append(examples, example)
-		values = append(values, todo.Title, todo.Completed)
-	}
+			// If not present, an error is returned.
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+				"error": "Assignee is required for all todos",
+			})
+		}
 
-	// Allows script to run until actual data is available.
-	placeholder := strings.Join(examples, ",")
-	query := fmt.Sprintf("INSERT INTO todos (title, completed) VALUES %s RETURNING id", placeholder)
+		// Parse due_date if provided into the dd-mm-yyyy format
+		var dueDate *time.Time
+		if input.DueDate != nil && *input.DueDate != "" {
+			parsed, err := time.Parse("02-01-2006", *input.DueDate) // dd-mm-yyyy
+			if err != nil {
+				return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+					"error": "Invalid due_date format. Use dd-mm-yyyy", // dd-mm-yyyy is used
+				})
+			}
+			dueDate = &parsed
+		}
 
-	// Run the DB query and extract the query result rows. If no rows are returned, an error code is returned.
-	rows, err := db.DB.Query(query, values...)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	// Extract the IDs from the query rows.
-	var ids []int
-	for rows.Next() {
+		// Insert each todo individually
 		var id int
-		if err := rows.Scan(&id); err != nil {
+
+		// After inserting, JSON returns all the values that was inserted
+		err := db.DB.QueryRow(`
+            INSERT INTO todos (title, completed, assignee, due_date)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        `, input.Title, input.Completed, input.Assignee, dueDate).Scan(&id)
+
+		// If no rows were changed, the a server error is returned
+		if err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 
-		// Adds elements to the end of a slice, if underlying array capacity is exceeded.
-		ids = append(ids, id)
+		// DueDate is formatted as a string for the response (optional)
+		dueDateStr := ""
+		if dueDate != nil {
+			dueDateStr = dueDate.Format("02-01-2006")
+		}
+
+		// Add inserted todo to response slice.
+		inserted = append(inserted, map[string]interface{}{
+			"id":        id,
+			"title":     input.Title,
+			"completed": input.Completed,
+			"assignee":  input.Assignee,
+			"due_date":  dueDateStr,
+		})
 	}
 
-	// Return success message if the TODO was created.
-	return c.Status(http.StatusCreated).JSON(fiber.Map{
-		"ids": ids,
-	})
+	// Step 4: Return all inserted todos in JSON format.
+	return c.Status(http.StatusCreated).JSON(inserted)
 }
 
-// Used in routes/routes.go
+// GetTodos handles GET /todos
+// Referenced in routes/routes.go
 // Fetches list of todos and returns them as JSON to the client.
-
 // Query the db, process each row in the TodoResponse struct, collect them in a slice, the return results as JSON
 func GetTodos(c *fiber.Ctx) error {
 
@@ -111,7 +121,7 @@ func GetTodos(c *fiber.Ctx) error {
 
 	// Execute query with paramaterized inputs, prevents SQL injection
 	// Retrive all the values and order them by id
-	rows, err := db.DB.Query("SELECT id, title, completed FROM todos ORDER BY id LIMIT $1 OFFSET $2", limit, offset) // Paramterized SQL query
+	rows, err := db.DB.Query("SELECT id, title, completed, assignee, due_date, completed_at FROM todos ORDER BY id LIMIT $1 OFFSET $2", limit, offset) // Paramterized SQL query
 	if err != nil {
 
 		// Return error if the query fails, with the error in JSON format
@@ -146,7 +156,7 @@ func GetTodos(c *fiber.Ctx) error {
 		var todo models.TodoResponse
 
 		// Scan the row values into the TodoResponse struct and return an error if the rows are unchganged (scanning fails).
-		err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed)
+		err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.Assignee, &todo.DueDate, &todo.CompletedAt)
 		if err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
@@ -185,7 +195,8 @@ func GetTodos(c *fiber.Ctx) error {
 	return c.Send(data)
 }
 
-// Used in routes/routes.go
+// Referenced in routes/routes.go
+// Fetches a todo by an ID that must be specified
 func GetTodoByID(c *fiber.Ctx) error {
 
 	// Get URL id
@@ -229,7 +240,8 @@ func GetTodoByID(c *fiber.Ctx) error {
 	})
 }
 
-// Used in routes/routes.go
+// DeleteTodo handles DELETE /todos, deleting a todo by the todo ID.
+// Referenced in routes/routes.go.
 func DeleteTodo(c *fiber.Ctx) error {
 
 	// Extract and validate TODO ID from the URL
@@ -286,7 +298,8 @@ func DeleteTodo(c *fiber.Ctx) error {
 	})
 }
 
-// Used in routes/routes.go
+// Handles updating an existing todo item
+// Refernced in routes/routes.go
 func UpdateTodo(c *fiber.Ctx) error {
 
 	// Read 'id' path parameter from the URL
@@ -301,30 +314,57 @@ func UpdateTodo(c *fiber.Ctx) error {
 		})
 	}
 
-	// Return this error if the structure of request is incorrect
-	var input models.TodoInput
+	// Define a struct for parsing the request body JSON.
+	var input struct {
+		Title     string  `json:"title"`
+		Completed bool    `json:"completed"`
+		DueDate   *string `json:"due_date"`
+	}
+
+	// Parse the request body JSON into the input struct.
 	if err := c.BodyParser(&input); err != nil {
+
+		// Return this error if the structure of request is incorrect.
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	// SQL UPDATE statement is executed, updates given TODOs
+	// Parse due_date string into a time.Time pointer.
+	// Only parse if the field is not nil and not empty.
+	var dueDate *time.Time
+	if input.DueDate != nil && *input.DueDate != "" {
+		parsed, err := time.Parse("02-01-2006", *input.DueDate) // Expects dd-mm-yyyy format
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid due_date format. Use dd-mm-yyyy",
+			})
+		}
+
+		// dueDate pointer is set for database insertion
+		dueDate = &parsed
+	}
+
+	// Query is executed, parameters is passed in
+	query := `
+		UPDATE todos
+		SET
+			title = $1,
+			completed = $2,
+			completed_at = CASE WHEN $2 = true THEN NOW() ELSE NULL END,
+			due_date = $3
+		WHERE id = $4
+	`
+
 	result, err := db.DB.Exec(
-		"UPDATE TODOs SET title = $1, completed = $2 WHERE id = $3",
+		query,
 		input.Title,
 		input.Completed,
+		dueDate,
 		id,
 	)
 
-	// If an error occurs the server error 500 message is returned, as well as an error description in the JSON.
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	// Check affected rows. If not affected rows, it means the TODO does not exist
+	// Check affected rows. If not affected rows, it means the TODO does not exist and an error is returned.
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -332,17 +372,25 @@ func UpdateTodo(c *fiber.Ctx) error {
 		})
 	}
 
-	// If the ID is not found, return not found error
+	// If the ID is not found, return not found error.
 	if rowsAffected == 0 {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "TODO not found",
 		})
 	}
 
-	// Updated TODO is returned for confirmation
+	// due_Date is prepared for a JSON response.
+	// If it is not nil, it is formatted as a dd-mm-yyyy string.
+	var dueDateStr string
+	if dueDate != nil {
+		dueDateStr = dueDate.Format("02-01-2006")
+	}
+
+	// Updated TODO is returned for confirmation, with these fields included
 	return c.JSON(fiber.Map{
-		"id":        "id",
-		"title":     input.Title,
-		"completed": input.Completed,
+		"id":          id,
+		"title":       input.Title,
+		"completedAt": input.Completed,
+		"due_date":    dueDateStr,
 	})
 }

@@ -10,7 +10,7 @@ import (
 func SetupRoutes(app *fiber.App) {
 
 	// POST /todos (Create todos).
-	app.Post("/todos", handlers.CreateTodo)
+	app.Post("/todos", handlers.CreateTodos)
 
 	// GET /todos (Retrieve paginated list of todos).
 	app.Get("/todos", handlers.GetTodos)
