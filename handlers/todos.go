@@ -152,7 +152,7 @@ func GetTodos(c *fiber.Ctx) error {
 	query := fmt.Sprintf(`
 		SELECT id, title, completed, due_date, completed_at, created_at, assignee
 		FROM todos
-		ORDER BY %s %s NULLS LAST
+		ORDER BY %s %s 
 		LIMIT $1 OFFSET $2
 	`, sortField, order)
 
