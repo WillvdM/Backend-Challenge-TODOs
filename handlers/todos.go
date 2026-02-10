@@ -98,25 +98,37 @@ func CreateTodos(c *fiber.Ctx) error {
 	return c.Status(http.StatusCreated).JSON(inserted)
 }
 
-// GetTodos handles GET /todos
-// Referenced in routes/routes.go
+// GetTodos handles GET /todos.
+// Referenced in routes/routes.go.
 // Fetches list of todos and returns them as JSON to the client.
-// Query the db, process each row in the TodoResponse struct, collect them in a slice, the return results as JSON
+// Query the db, process each row in the TodoResponse struct, collect them in a slice, the return results as JSON.
 func GetTodos(c *fiber.Ctx) error {
+
+	// Offset pagination is used to only return values from a specified point. Default is 0.
+	// Prevents invalid input.
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))
+
+	// The limit is set to only return a specified number of data. Default is 10.
+	// The limit is converted from string to int.
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
 
 	if offset < 0 {
 		offset = 0
 	}
+
+	// The max limit is 100.
 	if limit < 1 || limit > 100 {
 		limit = 10
 	}
 
-	// --- Sorting ---
+	// Get requested sort field from query parameters , the default is id.
 	sortField := c.Query("sort", "id")
+
+	// Get requested sort order from query parameters, the default is ascending.
 	order := strings.ToLower(c.Query("order", "asc"))
 
+	// Sort field is validated against the whitelist that was specified in config.yaml.
+	// Prevents SQL injection.
 	allowed := false
 	for _, f := range config.Config.SortFields {
 		if f == sortField {
@@ -124,68 +136,96 @@ func GetTodos(c *fiber.Ctx) error {
 			break
 		}
 	}
+
+	// Ensures safe fallback to the default if a field is not allowed.
 	if !allowed {
 		sortField = "id"
 	}
 
+	// Sort order is validated
 	if order != "asc" && order != "desc" {
 		order = "asc"
 	}
 
+	// Queries the database with ORDER BY.
+	// 'NULLS LAST' ensures that any null timestamp only appears at the bottom of the list.
 	query := fmt.Sprintf(`
-		SELECT id, title, completed, assignee, due_date, completed_at
+		SELECT id, title, completed, due_date, completed_at, created_at, assignee
 		FROM todos
-		ORDER BY %s %s
+		ORDER BY %s %s NULLS LAST
 		LIMIT $1 OFFSET $2
 	`, sortField, order)
 
+	// The query is executed.
 	rows, err := db.DB.Query(query, limit, offset)
 	if err != nil {
+
+		// On query failure, return an error.
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	defer rows.Close() // <- now reachable
 
+	// Rows are closed to free up resources.
+	defer rows.Close()
+
+	// Rows are scanned
+	// A slice is declared to hold the results
 	todos := []models.TodoResponse{}
 
+	// A for-loop that iterates over each result set row.
 	for rows.Next() {
 		var todo models.TodoResponse
-		err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.Assignee, &todo.DueDate, &todo.CompletedAt)
+
+		// Columns must be scanned in the exact order that the SELECT statement specifies.
+		// Pointer types is used for nullable timestamps, as this prevents runtime errors for columns that are NULL.
+		err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.DueDate, &todo.CompletedAt, &todo.CreatedAt, &todo.Assignee)
 		if err != nil {
+
+			// A server error is returned on scan failure.
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+
+		// Add data to the end of the todo array slice, without modifying the previous data.
 		todos = append(todos, todo)
 	}
 
+	// Check for iteration errors after looping.
 	if err := rows.Err(); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
+	// Calculate the total number of table rows.
 	var totalCount int
 	err = db.DB.QueryRow("SELECT COUNT(*) FROM todos").Scan(&totalCount)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	// Calculate the current page number.
 	currentPage := (offset / limit) + 1
+
+	// Caluculate the total number of pages.
 	totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
 
+	// The response object is constructed
 	response := models.TodosResponse{
 		Todos:       todos,
 		CurrentPage: currentPage,
 		TotalPages:  totalPages,
 	}
 
+	// JSON response is printed neatly for readability using Marshal response.
 	data, err := json.MarshalIndent(response, "", " ")
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	// Set the content-type header and send the response.
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	return c.Send(data)
 }
@@ -337,7 +377,7 @@ func UpdateTodo(c *fiber.Ctx) error {
 		dueDate = &parsed
 	}
 
-	// Query is executed, parameters is passed in
+	// Query is executed, parameters are passed in
 	query := `
 		UPDATE todos
 		SET

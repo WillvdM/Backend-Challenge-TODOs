@@ -28,21 +28,19 @@ const (
 
 /*
 AppConfig holds all application-level configuration values.
-
+This includes the deletion mode, database url address, and what fields are displayed when sorting
 Values are loaded from `config.yaml`.
 */
 type AppConfig struct {
 	DeletionMode DeletionMode `yaml:"deletion_mode"`
-	DatabaseURL  string       `yaml:"host = localhost port = 5432 user = postgres password = postgres dbname = TODOs sslmode = disable"`
-	SortFields   []string     `yaml:"soft_fields"`
+	DatabaseURL  string       `yaml:"database_url"`
+	SortFields   []string     `yaml:"sort_fields"`
 }
 
 // Config is the globally accessible configuration instance.
-
 var Config AppConfig
 
-//validDeletionModes defines the allowed enum-like values for the `deletion_mode` configuration.
-
+// validDeletionModes defines the allowed enum-like values for the `deletion_mode` configuration.
 var validDeletionModes = map[DeletionMode]bool{
 	DeletionSoft: true,
 	DeletionHard: true,

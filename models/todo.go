@@ -15,8 +15,8 @@ type Todo struct {
 // TodoInput represents the payload used when creating or updating a todo.
 // It embeds Todo to reuse common fields.
 type TodoInput struct {
-	Todo
 	CreatedAt time.Time `json:"created_at,omitempty"`
+	Todo
 }
 
 // TodoResponse represents a todo returned by the API.
@@ -24,6 +24,7 @@ type TodoInput struct {
 type TodoResponse struct {
 	ID          int        `json:"id"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	CreatedAt   *time.Time `json:"created_at"`
 	Todo
 }
 
