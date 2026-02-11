@@ -230,6 +230,8 @@ func GetTodos(c *fiber.Ctx) error {
 	return c.Send(data)
 }
 
+// GetTodoByID handles GET /todo/:id
+// Referenced in routes/routes.go
 func GetTodoByID(c *fiber.Ctx) error {
 
 	// Get URL id
@@ -239,20 +241,20 @@ func GetTodoByID(c *fiber.Ctx) error {
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
 
-		// Return error if the TODO id is not a valid integer
+		// Return error if the TODO id is not a valid integer.
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid TODO id",
 		})
 	}
 
-	// Struct for the database results before it is converted to TodoResponse
+	// Struct for the database results.
 	var todo struct {
 		ID        int
 		Title     string
 		Completed bool
 	}
 
-	// The database is queried for the todo with the given id
+	// The database is queried for the todo with the given id.
 	err = db.DB.QueryRow(
 		"SELECT id, title, completed FROM TODOS WHERE id = $1",
 		id,
@@ -271,6 +273,75 @@ func GetTodoByID(c *fiber.Ctx) error {
 		"title":     todo.Title,
 		"completed": todo.Completed,
 	})
+}
+
+// GetExpiredTodo handles GET /todos/expired
+// Refrenced in routes/routes.go
+func GetExpiredTodo(c *fiber.Ctx) error {
+
+	// This SQL query fetches expired todos.
+	// The most overdue todo appears first.
+	query := `
+	SELECT id, title, completed, assignee, due_date, completed_at, created_at
+	FROM todos
+	WHERE due_date IS NOT NULL
+	AND due_date < NOW()
+	AND (completed IS NULL OR completed = false)
+	ORDER BY due_date ASC
+	`
+
+	// The query is executed.
+	rows, err := db.DB.Query(query)
+	if err != nil {
+
+		// Return a server error if the query fails.
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// Ensure that the rows are closed after processing, increasing performance.
+	defer rows.Close()
+
+	// The expired slice stores all expired toods.
+	expired := []models.TodoResponse{}
+
+	// Each row that the query returned is iterated over.
+	for rows.Next() {
+		var todo models.TodoResponse
+
+		// Temporary varaibles for DB column scanning.
+		var title string
+		var assignee string
+		var completed bool
+		var dueDate *string // Changed from *time.Time to string for easier user input.
+		var completedAt *time.Time
+		var createdAt *time.Time
+
+		// The database row is scanned into temporary variables.
+		if err := rows.Scan(&todo.ID, &title, &completed, &assignee, &dueDate, &completedAt, &createdAt); err != nil {
+
+			// Return a server error if the scanning fails.
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// The scanned values are mapped into the TodoResponse struct.
+		todo.Title = &title
+		todo.Completed = &completed
+		todo.Assignee = &assignee
+		todo.DueDate = dueDate
+		todo.CompletedAt = completedAt
+		todo.CreatedAt = createdAt
+
+		// The todo is appended to the expired slice.
+		expired = append(expired, todo)
+	}
+
+	// List all values in JSON format.
+	return c.JSON(fiber.Map{"expired_todos": expired})
+
 }
 
 // DeleteTodo handles DELETE /todos, deleting a todo by the todo ID.
@@ -331,20 +402,26 @@ func DeleteTodo(c *fiber.Ctx) error {
 	})
 }
 
-// Handles updating an existing todo item
+// Handles updating an existing todo item with PATCH
 // Refernced in routes/routes.go
 func UpdateTodo(c *fiber.Ctx) error {
 
-	// Extract the todo ID from the URL path parameter, convert it to int.
+	// Extract the todo ID from the URL path parameter, convert it to integer.
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
+
+		// Return error if ID is not an integer.
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid TODO id",
 		})
 	}
 
-	// Define a struct to hold input fields for partial updates.
-	var input models.TodoInput
+	// Define a struct to hold input fields for partial updates (only provided fields gets updated)
+	var input struct {
+		Title     *string `json:"title,omitempty"`
+		Completed *bool   `json:"completed,omitempty"`
+		DueDate   *string `json:"due_date,omitempty"` // string for parsing, leading to easier user input
+	}
 
 	// Allow empty PATCH body, but only parse request body if it is not empty.
 	if len(c.Body()) != 0 {
@@ -355,9 +432,21 @@ func UpdateTodo(c *fiber.Ctx) error {
 		}
 	}
 
-	// Build dynamic update query for partial updates.
-	setParts := []string{}  // Holds the "SET" clause.
-	args := []interface{}{} // Holds paramterized value inputs.
+	// Parse the due_date string into *time.Time if it is provided.
+	var dueDate *time.Time
+	if input.DueDate != nil && *input.DueDate != "" {
+		parsed, err := time.Parse("02-01-2006", *input.DueDate) // Expects dd-mm-yyyy format.
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid due_date format. Use dd-mm-yyyy",
+			})
+		}
+		dueDate = &parsed
+	}
+
+	// Build dynamic SET clause
+	setParts := []string{}
+	args := []interface{}{}
 	argID := 1
 
 	// If a title is provided, it will be included.
@@ -372,16 +461,13 @@ func UpdateTodo(c *fiber.Ctx) error {
 		setParts = append(setParts, fmt.Sprintf("completed = $%d", argID))
 		args = append(args, *input.Completed)
 		argID++
-
-		// Update 	completed_at only if completed is set to "true".
-		setParts = append(setParts,
-			fmt.Sprintf("completed_at = CASE WHEN $%d = true THEN NOW() ELSE NULL END", argID-1))
+		setParts = append(setParts, fmt.Sprintf("completed_at = CASE WHEN $%d = true THEN NOW() ELSE NULL END", argID-1))
 	}
 
 	// If due_date is provided, it will be included.
-	if input.DueDate != nil {
+	if dueDate != nil {
 		setParts = append(setParts, fmt.Sprintf("due_date = $%d", argID))
-		args = append(args, input.DueDate)
+		args = append(args, dueDate)
 		argID++
 	}
 
@@ -406,10 +492,10 @@ func UpdateTodo(c *fiber.Ctx) error {
 	// These variables hold the returned values from the query.
 	var title string
 	var completedAt *time.Time
-	var dueDate *time.Time
+	var dbDueDate *time.Time
 
 	// Query is executed, and results scanned.
-	err = db.DB.QueryRow(query, args...).Scan(&title, &completedAt, &dueDate)
+	err = db.DB.QueryRow(query, args...).Scan(&title, &completedAt, &dbDueDate)
 	if err == sql.ErrNoRows {
 
 		// Return an error if no TODO was found with the given ID.
@@ -433,8 +519,8 @@ func UpdateTodo(c *fiber.Ctx) error {
 
 	// Format due_date timestamp as a string if it is present.
 	var dueDateStr string
-	if dueDate != nil {
-		dueDateStr = dueDate.Format("02-01-2006")
+	if dbDueDate != nil {
+		dueDateStr = dbDueDate.Format("02-01-2006")
 	}
 
 	// Return updated TODO fields in JSON format.

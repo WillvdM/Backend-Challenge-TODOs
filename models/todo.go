@@ -9,7 +9,7 @@ type Todo struct {
 	Title       *string    `json:"title,omitempty"`
 	Completed   *bool      `json:"completed,omitempty"`
 	Assignee    *string    `json:"assignee"`
-	DueDate     *time.Time `json:"due_date,omitempty"`
+	DueDate     *string    `json:"due_date,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	CreatedAt   *time.Time `json:"created_at"`
 }

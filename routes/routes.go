@@ -15,6 +15,9 @@ func SetupRoutes(app *fiber.App) {
 	// GET /todos (Retrieve paginated list of todos).
 	app.Get("/todos", handlers.GetTodos)
 
+	// GET /todos that are expired
+	app.Get("todos/expired", handlers.GetExpiredTodo)
+
 	// GET /todos by ID (Retrieve todos by ID).
 	app.Get("/todos/:id", handlers.GetTodoByID)
 
