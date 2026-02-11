@@ -6,9 +6,9 @@ import "time"
 // This struct is embedded in other models.
 // Todo contains fields shared across input, database, and output.
 type Todo struct {
-	Title       string     `json:"title,omitempty"`
-	Completed   bool       `json:"completed,omitempty"`
-	Assignee    string     `json:"assignee"`
+	Title       *string    `json:"title,omitempty"`
+	Completed   *bool      `json:"completed,omitempty"`
+	Assignee    *string    `json:"assignee"`
 	DueDate     *time.Time `json:"due_date,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	CreatedAt   *time.Time `json:"created_at"`

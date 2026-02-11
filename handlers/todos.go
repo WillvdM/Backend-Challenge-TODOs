@@ -335,94 +335,113 @@ func DeleteTodo(c *fiber.Ctx) error {
 // Refernced in routes/routes.go
 func UpdateTodo(c *fiber.Ctx) error {
 
-	// Read 'id' path parameter from the URL
-	idParam := c.Params("id")
-
-	// Convert the ID from string to integer
-	// If conversion fails, ID is invalid
-	id, err := strconv.Atoi(idParam)
+	// Extract the todo ID from the URL path parameter, convert it to int.
+	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid TODO id",
 		})
 	}
 
-	// Define a struct for parsing the request body JSON.
-	var input struct {
-		models.Todo
-		DueDate *string `json:"due_date"`
+	// Define a struct to hold input fields for partial updates.
+	var input models.TodoInput
+
+	// Allow empty PATCH body, but only parse request body if it is not empty.
+	if len(c.Body()) != 0 {
+		if err := c.BodyParser(&input); err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid request body",
+			})
+		}
 	}
 
-	// Parse the request body JSON into the input struct.
-	if err := c.BodyParser(&input); err != nil {
+	// Build dynamic update query for partial updates.
+	setParts := []string{}  // Holds the "SET" clause.
+	args := []interface{}{} // Holds paramterized value inputs.
+	argID := 1
 
-		// Return this error if the structure of request is incorrect.
+	// If a title is provided, it will be included.
+	if input.Title != nil {
+		setParts = append(setParts, fmt.Sprintf("title = $%d", argID))
+		args = append(args, *input.Title)
+		argID++
+	}
+
+	// If completed flag is provided, it will be included.
+	if input.Completed != nil {
+		setParts = append(setParts, fmt.Sprintf("completed = $%d", argID))
+		args = append(args, *input.Completed)
+		argID++
+
+		// Update 	completed_at only if completed is set to "true".
+		setParts = append(setParts,
+			fmt.Sprintf("completed_at = CASE WHEN $%d = true THEN NOW() ELSE NULL END", argID-1))
+	}
+
+	// If due_date is provided, it will be included.
+	if input.DueDate != nil {
+		setParts = append(setParts, fmt.Sprintf("due_date = $%d", argID))
+		args = append(args, input.DueDate)
+		argID++
+	}
+
+	// If no fields were provided in the body, an error is returned.
+	if len(setParts) == 0 {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
+			"error": "No fields provided for update",
 		})
 	}
 
-	// Parse due_date string into a time.Time pointer.
-	// Only parse if the field is not nil and not empty.
-	var dueDate *time.Time
-	if input.DueDate != nil && *input.DueDate != "" {
-		parsed, err := time.Parse("02-01-2006", *input.DueDate) // Expects dd-mm-yyyy format
-		if err != nil {
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid due_date format. Use dd-mm-yyyy",
-			})
-		}
-
-		// dueDate pointer is set for database insertion
-		dueDate = &parsed
-	}
-
-	// Query is executed, parameters are passed in
-	query := `
+	// The final SQL query is dynamically constructed.
+	query := fmt.Sprintf(`
 		UPDATE todos
-		SET
-			title = $1,
-			completed = $2,
-			completed_at = CASE WHEN $2 = true THEN NOW() ELSE NULL END,
-			due_date = $3
-		WHERE id = $4
-	`
+		SET %s
+		WHERE id = $%d
+		RETURNING title, completed_at, due_date
+	`, strings.Join(setParts, ", "), argID)
 
-	result, err := db.DB.Exec(
-		query,
-		input.Title,
-		input.Completed,
-		dueDate,
-		id,
-	)
+	// Append the TODO ID as the last argument for the WHERE clause.
+	args = append(args, id)
 
-	// Check affected rows. If not affected rows, it means the TODO does not exist and an error is returned.
-	rowsAffected, err := result.RowsAffected()
+	// These variables hold the returned values from the query.
+	var title string
+	var completedAt *time.Time
+	var dueDate *time.Time
+
+	// Query is executed, and results scanned.
+	err = db.DB.QueryRow(query, args...).Scan(&title, &completedAt, &dueDate)
+	if err == sql.ErrNoRows {
+
+		// Return an error if no TODO was found with the given ID.
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{
+			"error": "TODO not found",
+		})
+	}
 	if err != nil {
+
+		// ANy other database error.
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	// If the ID is not found, return not found error.
-	if rowsAffected == 0 {
-		return c.Status(http.StatusNotFound).JSON(fiber.Map{
-			"error": "TODO not found",
-		})
+	// Format completed_at timestamp as a string if it is present.
+	var completedAtStr string
+	if completedAt != nil {
+		completedAtStr = completedAt.Format("02-01-2006 15:04:05")
 	}
 
-	// due_Date is prepared for a JSON response.
-	// If it is not nil, it is formatted as a dd-mm-yyyy string.
+	// Format due_date timestamp as a string if it is present.
 	var dueDateStr string
 	if dueDate != nil {
 		dueDateStr = dueDate.Format("02-01-2006")
 	}
 
-	// Updated TODO is returned for confirmation, with these fields included
+	// Return updated TODO fields in JSON format.
 	return c.JSON(fiber.Map{
 		"id":          id,
-		"title":       input.Title,
-		"completedAt": input.Completed,
+		"title":       title,
+		"completedAt": completedAtStr,
 		"due_date":    dueDateStr,
 	})
 }

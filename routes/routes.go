@@ -22,5 +22,6 @@ func SetupRoutes(app *fiber.App) {
 	app.Delete("/todos/:id", handlers.DeleteTodo)
 
 	// UPDATE /todos (Update todos by ID).
-	app.Put("/todos/:id", handlers.UpdateTodo)
+	app.Patch("/todos/:id", handlers.UpdateTodo)
+
 }
