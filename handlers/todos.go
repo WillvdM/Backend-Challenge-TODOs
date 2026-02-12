@@ -150,7 +150,7 @@ func GetTodos(c *fiber.Ctx) error {
 	// Queries the database with ORDER BY.
 	// 'NULLS LAST' ensures that any null timestamp only appears at the bottom of the list.
 	query := fmt.Sprintf(`
-		SELECT id, title, completed, due_date, completed_at, created_at, assignee
+		SELECT id, title, completed, due_date, completed_at, created_at, assignee, updated_at
 		FROM todos
 		ORDER BY %s %s 
 		LIMIT $1 OFFSET $2
@@ -179,7 +179,7 @@ func GetTodos(c *fiber.Ctx) error {
 
 		// Columns must be scanned in the exact order that the SELECT statement specifies.
 		// Pointer types is used for nullable timestamps, as this prevents runtime errors for columns that are NULL.
-		err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.DueDate, &todo.CompletedAt, &todo.CreatedAt, &todo.Assignee)
+		err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.DueDate, &todo.CompletedAt, &todo.CreatedAt, &todo.Assignee, &todo.UpdatedAt)
 		if err != nil {
 
 			// A server error is returned on scan failure.
@@ -252,18 +252,19 @@ func GetTodoByID(c *fiber.Ctx) error {
 		ID        int
 		Title     string
 		Completed bool
+		UpdatedAt time.Time
 	}
 
 	// The database is queried for the todo with the given id.
 	err = db.DB.QueryRow(
-		"SELECT id, title, completed FROM TODOS WHERE id = $1",
+		"SELECT id, title, completed, updated_at FROM TODOS WHERE id = $1",
 		id,
-	).Scan(&todo.ID, &todo.Title, &todo.Completed)
+	).Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.UpdatedAt)
 	if err != nil {
 
 		// Return error if no TODO with the given ID exists
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
-			"error": "TDOO not found",
+			"error": "TODO not found",
 		})
 	}
 
@@ -282,7 +283,7 @@ func GetExpiredTodo(c *fiber.Ctx) error {
 
 	// Query is executed to retrieve expired todos
 	rows, err := db.DB.Query(`
-		SELECT id, title, completed, assignee, due_date, completed_at, created_at
+		SELECT id, title, completed, assignee, due_date, completed_at, created_at, updated_at
 		FROM todos
 		WHERE due_date < NOW()
 		AND (completed = false OR completed IS NULL)
@@ -324,6 +325,7 @@ func GetExpiredTodo(c *fiber.Ctx) error {
 			&dbDueDate,
 			&todo.CompletedAt,
 			&todo.CreatedAt,
+			&todo.UpdatedAt,
 		)
 		if err != nil {
 
@@ -491,7 +493,7 @@ func UpdateTodo(c *fiber.Ctx) error {
 		UPDATE todos
 		SET %s
 		WHERE id = $%d
-		RETURNING title, completed_at, due_date
+		RETURNING title, completed_at, due_date, updated_at
 	`, strings.Join(setParts, ", "), argID)
 
 	// Append the TODO ID as the last argument for the WHERE clause.
@@ -501,9 +503,10 @@ func UpdateTodo(c *fiber.Ctx) error {
 	var title string
 	var completedAt *time.Time
 	var dbDueDate *time.Time
+	var updatedAt *time.Time
 
 	// Query is executed, and results scanned.
-	err = db.DB.QueryRow(query, args...).Scan(&title, &completedAt, &dbDueDate)
+	err = db.DB.QueryRow(query, args...).Scan(&title, &completedAt, &dbDueDate, &updatedAt)
 	if err == sql.ErrNoRows {
 
 		// Return an error if no TODO was found with the given ID.
@@ -531,11 +534,18 @@ func UpdateTodo(c *fiber.Ctx) error {
 		dueDateStr = dbDueDate.Format("02-01-2006")
 	}
 
+	// Format updated_at timestamp as a string if it is present
+	var updatedAtStr string
+	if updatedAt != nil {
+		updatedAtStr = updatedAt.Format("02-01-2006 15:04:05")
+	}
+
 	// Return updated TODO fields in JSON format.
 	return c.JSON(fiber.Map{
 		"id":          id,
 		"title":       title,
 		"completedAt": completedAtStr,
 		"due_date":    dueDateStr,
+		"updated_at":  updatedAtStr,
 	})
 }

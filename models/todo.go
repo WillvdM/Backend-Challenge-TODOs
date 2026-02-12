@@ -12,6 +12,7 @@ type Todo struct {
 	DueDate     *string    `json:"due_date,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	CreatedAt   *time.Time `json:"created_at"`
+	UpdatedAt   *time.Time `json:"updated_at"`
 }
 
 // TodoInput represents the payload used when creating or updating a todo.
