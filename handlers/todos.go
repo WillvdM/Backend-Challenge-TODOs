@@ -275,23 +275,18 @@ func GetTodoByID(c *fiber.Ctx) error {
 	})
 }
 
-// GetExpiredTodo handles GET /todos/expired
 // Refrenced in routes/routes.go
+// GetExpiredTodos returns all todos where due_date has passed.
+// and the todo is not completed.
 func GetExpiredTodo(c *fiber.Ctx) error {
 
-	// This SQL query fetches expired todos.
-	// The most overdue todo appears first.
-	query := `
-	SELECT id, title, completed, assignee, due_date, completed_at, created_at
-	FROM todos
-	WHERE due_date IS NOT NULL
-	AND due_date < NOW()
-	AND (completed IS NULL OR completed = false)
-	ORDER BY due_date ASC
-	`
-
-	// The query is executed.
-	rows, err := db.DB.Query(query)
+	// Query is executed to retrieve expired todos
+	rows, err := db.DB.Query(`
+		SELECT id, title, completed, assignee, due_date, completed_at, created_at
+		FROM todos
+		WHERE due_date < NOW()
+		AND (completed = false OR completed IS NULL)
+	`)
 	if err != nil {
 
 		// Return a server error if the query fails.
@@ -299,27 +294,38 @@ func GetExpiredTodo(c *fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+	defer rows.Close() // Ensures that rows are closed after the function exits, freeing up resources.
 
-	// Ensure that the rows are closed after processing, increasing performance.
-	defer rows.Close()
+	// reponseTodo wraps the model with an ID field, as ID is not part of models.Todo.
+	type responseTodo struct {
+		ID int `json:"id"`
+		models.Todo
+	}
 
-	// The expired slice stores all expired toods.
-	expired := []models.TodoResponse{}
+	// A slice to store all the expired todos returned by the query.
+	var expiredTodos []responseTodo
 
 	// Each row that the query returned is iterated over.
 	for rows.Next() {
-		var todo models.TodoResponse
 
-		// Temporary varaibles for DB column scanning.
-		var title string
-		var assignee string
-		var completed bool
-		var dueDate *string // Changed from *time.Time to string for easier user input.
-		var completedAt *time.Time
-		var createdAt *time.Time
+		// Temporary values are declared to scan DB values.
+		var (
+			id        int
+			todo      models.Todo
+			dbDueDate *time.Time // Converted to string later.
+		)
 
-		// The database row is scanned into temporary variables.
-		if err := rows.Scan(&todo.ID, &title, &completed, &assignee, &dueDate, &completedAt, &createdAt); err != nil {
+		// Scan DB values
+		err := rows.Scan(
+			&id,
+			&todo.Title,
+			&todo.Completed,
+			&todo.Assignee,
+			&dbDueDate,
+			&todo.CompletedAt,
+			&todo.CreatedAt,
+		)
+		if err != nil {
 
 			// Return a server error if the scanning fails.
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -327,21 +333,23 @@ func GetExpiredTodo(c *fiber.Ctx) error {
 			})
 		}
 
-		// The scanned values are mapped into the TodoResponse struct.
-		todo.Title = &title
-		todo.Completed = &completed
-		todo.Assignee = &assignee
-		todo.DueDate = dueDate
-		todo.CompletedAt = completedAt
-		todo.CreatedAt = createdAt
+		// Convert due_date from *time.Time to *string
+		if dbDueDate != nil {
+			formatted := dbDueDate.Format("02-01-2006")
+			todo.DueDate = &formatted
+		}
 
 		// The todo is appended to the expired slice.
-		expired = append(expired, todo)
+		expiredTodos = append(expiredTodos, responseTodo{
+			ID:   id,
+			Todo: todo,
+		})
 	}
 
 	// List all values in JSON format.
-	return c.JSON(fiber.Map{"expired_todos": expired})
-
+	return c.JSON(fiber.Map{
+		"expired_todos": expiredTodos,
+	})
 }
 
 // DeleteTodo handles DELETE /todos, deleting a todo by the todo ID.
