@@ -27,4 +27,19 @@ func SetupRoutes(app *fiber.App) {
 	// UPDATE /todos (Update todos by ID).
 	app.Patch("/todos/:id", handlers.UpdateTodo)
 
+	// POST /users (Create users)
+	app.Post("/users", handlers.CreateUser)
+
+	// GET /users (Retrieve users)
+	app.Get("/users", handlers.GetUsers)
+
+	// GET /users (Retrieve users by ID)
+	app.Get("/users/:id", handlers.GetUserById)
+
+	// DELETE /users (Delete users by ID)
+	app.Delete("/users/:id", handlers.DeleteUser)
+
+	// PATCH /users (Update users by ID)
+	app.Patch("/users/:id", handlers.UpdateUser)
+
 }

@@ -35,3 +35,15 @@ type TodosResponse struct {
 	CurrentPage int            `json:"current_page"`
 	TotalPages  int            `json:"total_pages"`
 }
+
+// Users represents a user entity.
+// This struct is embedded in other models.
+type User struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Surname   string     `json:surname"`
+	Username  string     `json:"username"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
+}
