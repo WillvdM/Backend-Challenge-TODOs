@@ -556,11 +556,12 @@ func UpdateTodo(c *fiber.Ctx) error {
 	})
 }
 
-// CreateUsers function adds a user record to the database.
-// Referenced in routes/routes.go.
+// CreateUsers function adds a single user or multiple user records to the database.
+// The inputs struct specifies which fields needs to be completed to create the user.
+// Provides a useful response message if the user was created.
+// Routed in routes/routes.go.
 func CreateUser(c *fiber.Ctx) error {
 
-	// The inputs struct declares what fields need to be modified for the record/s to be created (name, surname, username).
 	var inputs []struct {
 		Name     string `json:"name"`
 		Surname  string `json:"surname"`
@@ -568,29 +569,22 @@ func CreateUser(c *fiber.Ctx) error {
 	}
 
 	if err := c.BodyParser(&inputs); err != nil {
-
-		// Returns an error if the input is not in the correct format.
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	// Returns error if no name, surname or username values are provided.
 	if len(inputs) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "No user created",
 		})
 	}
 
-	// Stores succefully created IDs
 	createdIDs := []string{}
 
-	// for-loop that iterates over each user that was provided in the request body.
 	for _, input := range inputs {
 
 		var id string
-
-		// Executes the query that inserts the values into the user table.
 		err := db.DB.QueryRow(`
 	INSERT INTO users (name, surname, username)
 	VALUES ($1, $2, $3)
@@ -603,11 +597,9 @@ func CreateUser(c *fiber.Ctx) error {
 			})
 		}
 
-		// The generated ID is collected for the response.
 		createdIDs = append(createdIDs, id)
 	}
 
-	// Return all created user IDs.
 	return c.Status(201).JSON(fiber.Map{
 		"message": "User created",
 		"ids":     createdIDs,
@@ -615,64 +607,64 @@ func CreateUser(c *fiber.Ctx) error {
 }
 
 // GetUsers function fecthes all users and lists them in JSON format.
-// Referenced in routes/rotutes.go.
+// The users array is iterated over and results are scanned.
+// Routed in routes/rotutes.go.
 func GetUsers(c *fiber.Ctx) error {
 
-	// Query that is executed to return all user records.
 	rows, err := db.DB.Query(`
 	SELECT id, name, surname, username, created_at, updated_at, deleted_at
 	FROM users
 	`)
 
-	// Returns an error if the query could not be exectued.
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
-	defer rows.Close() // Closes the rows after the function exits, freeing up resources.
+	defer rows.Close()
 
-	// A users array is declared to hold the results.
 	users := []models.User{}
-
-	// The array is iterated over and the results are scanned to userd array.
 	for rows.Next() {
-		var u models.User
-
-		// Scans all the values from the DB and place it in holders.
-		if err := rows.Scan(&u.ID, &u.Name, &u.Surname, &u.Username, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt); err != nil {
-
-			// Returns an error if the user array cannot be collected.
+		var userResponse models.User
+		if err := rows.Scan(&userResponse.ID,
+			&userResponse.Name,
+			&userResponse.Surname,
+			&userResponse.Username,
+			&userResponse.CreatedAt,
+			&userResponse.UpdatedAt,
+			&userResponse.DeletedAt); err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 
-		// Add the records scanned from the database to the end of the users array.
-		users = append(users, u)
+		users = append(users, userResponse)
 	}
 
-	// Return a list of users in JSON.
 	return c.JSON(users)
 }
 
 // GetUserById function returns a user record that was searched by the user's ID.
-// Referenced in routes/routes.go.
+// A container is created for the User model structure that was declared in models/todo.go.
+// Routed in routes/routes.go.
 func GetUserById(c *fiber.Ctx) error {
 	id := c.Params("id")
 
-	// A container is created for the User model structure that was declared in models/todo.go.
-	var u models.User
+	var userResponse models.User
 
-	// Query that is executed to return the user record.
 	err := db.DB.QueryRow(`
 	SELECT id, name, surname, username, created_at, updated_at, deleted_at
 	FROM users
 	WHERE id=$1 
-	`, id).Scan(&u.ID, &u.Name, &u.Surname, &u.Username, &u.CreatedAt, &u.UpdatedAt, &u.DeletedAt) // Scans the specified values from the database and places it in the "u" container.
+	`, id).Scan(&userResponse.ID,
+		&userResponse.Name,
+		&userResponse.Surname,
+		&userResponse.Username,
+		&userResponse.CreatedAt,
+		&userResponse.UpdatedAt,
+		&userResponse.DeletedAt)
 
 	if err == sql.ErrNoRows {
-		// Returns an error if no rows were returned.
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found"})
 	} else if err != nil {
@@ -681,34 +673,30 @@ func GetUserById(c *fiber.Ctx) error {
 		})
 	}
 
-	// Return the user record ("u") in JSON.
-	return c.JSON(u)
+	return c.JSON(userResponse)
 }
 
 // UpdateUser function updates a user's name, surname and username by using their ID as the parameter.
+// A time is set that a user must wait before updating their username (24 hours).
+// Returns an error if the user tries to update their username without waiting 24 hours after previous update.
+// Provides a useful response once a user has been updated.
+// Routed in routes/routes.go
 func UpdateUser(c *fiber.Ctx) error {
 	id := c.Params("id")
-
-	// Define a structure that indicates what fields need to be updated for the record to be updated.
 	var input struct {
 		Name     *string `json:"name"`
 		Surname  *string `json:"surname"`
 		Username *string `json:"username"`
 	}
 	if err := c.BodyParser(&input); err != nil {
-
-		// Return an error if the updated changes are not sent in the correct JSON format.
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	//Fetch the current user and when the user was updated.
 	var currentUsername string
 	var updatedAt time.Time
 
-	// Query that is executed to gather the rows that must be updated.
-	// The results are scanned into the DB.
 	err := db.DB.QueryRow(`
 	SELECT username, updated_at
 	FROM users 
@@ -716,7 +704,6 @@ func UpdateUser(c *fiber.Ctx) error {
 	`, id).Scan(&currentUsername, &updatedAt)
 	if err == sql.ErrNoRows {
 
-		// Returns an error if ID that was entered is not found in the DB.
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found"})
 	} else if err != nil {
@@ -725,74 +712,63 @@ func UpdateUser(c *fiber.Ctx) error {
 		})
 	}
 
-	// Build dynamic SET clause and parameter list for partial updates.
 	setParts := []string{}
 	args := []interface{}{}
 	argID := 1
 
-	// If the name of the user changes, the name field must be changed to the new value.
 	if input.Name != nil {
 		setParts = append(setParts, fmt.Sprintf("name = $%d", argID))
 		args = append(args, *input.Name)
-		argID++ // Each time a field is added, the placholder after that is used. $1 is used here.
+		argID++
 	}
 
-	// If the surname of the user changes, the "surname" field must be changed to the new value.
 	if input.Surname != nil {
 		setParts = append(setParts, fmt.Sprintf("surname = $%d", argID))
 		args = append(args, *input.Surname)
-		argID++ // $2 used here.
+		argID++
 	}
 
 	if input.Username != nil && *input.Username != currentUsername {
-		if time.Since(updatedAt) < 24*time.Hour { // Set the time a user must wait before updating their username (24 hours).
-
-			// Returns an error if the user tries to update their username without waiting 24 hours after previous update.
+		if time.Since(updatedAt) < 24*time.Hour {
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 				"error": "Username can only be updated once every 24 hours",
 			})
 		}
 
-		// If the username of the user changes, the username record must be changed to new value.
 		setParts = append(setParts, fmt.Sprintf("username = $%d", argID))
 		args = append(args, *input.Username)
-		argID++ // $3 used here.
+		argID++
 	}
 
-	// If the updated fields are the same as the current fields, a message is returned without the records being changed.
 	if len(setParts) == 0 {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "No fields to update",
 		})
 	}
 
-	//Update the updated_at timestamp
 	setParts = append(setParts, ("updated_at = NOW()"))
 
-	// Execute the query to update the user table with the new data.
 	query := fmt.Sprintf(`
 	UPDATE users
 	SET %s WHERE id=$%d
-	`, strings.Join(setParts, ", "), argID) // The parts that were set earlier (name, surname, username) are joined.
+	`, strings.Join(setParts, ", "), argID)
 	args = append(args, id)
 
-	_, err = db.DB.Exec(query, args...) // "args" values and  are passed in.
+	_, err = db.DB.Exec(query, args...)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	// Return the success message in JSON if the user was updated
 	return c.JSON(fiber.Map{"message": "User updated"})
 }
 
 // The DeleteUser function allows a user to be soft deleted by their id.
-// Referenced in routes/routes.go.
+// Provides a useful response if a user has been soft deleted.
+// Routed in routes/routes.go.
 func DeleteUser(c *fiber.Ctx) error {
 	id := c.Params("id")
-
-	// Query that is executed that deletes a user.
 	res, err := db.DB.Exec(`
 		UPDATE users
 		SET deleted_at = NOW()
@@ -806,13 +782,10 @@ func DeleteUser(c *fiber.Ctx) error {
 
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
-
-		// Returns an error if no rows were soft deleted.
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found",
 		})
 	}
 
-	// Returns a success message in JSON if the user was soft deleted.
 	return c.JSON(fiber.Map{"message": "User deleted"})
 }
