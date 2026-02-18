@@ -1,9 +1,3 @@
-/*
- 	Execute this command to add the deleted_at table in postgreSQL
-    alter table todos
-    add column deleted_at TIMESTAMP NULL
-*/
-
 package config
 
 import (
@@ -37,7 +31,6 @@ type AppConfig struct {
 	SortFields   []string     `yaml:"sort_fields"`
 }
 
-// Config is the globally accessible configuration instance.
 var Config AppConfig
 
 // validDeletionModes defines the allowed enum-like values for the `deletion_mode` configuration.
@@ -61,20 +54,17 @@ func LoadConfig() {
 		DeletionMode: DeletionSoft,
 	}
 
-	// Attempt to read config.yaml
 	file, err := os.ReadFile("config.yaml")
 	if err != nil {
 		log.Println("config.yaml not found, defaulting to SOFT delete")
 		return
 	}
 
-	// Parse YAML into Config
 	if err := yaml.Unmarshal(file, &Config); err != nil {
 		log.Println("Invalid config.yaml, defaulting to SOFT delete")
 		return
 	}
 
-	// Validate deletion_mode value
 	if !validDeletionModes[Config.DeletionMode] {
 		log.Println("Invalid deletion_mode value, defaulting to SOFT delete")
 		Config.DeletionMode = DeletionSoft

@@ -1,15 +1,12 @@
-# Should not contain sensitive info
-# config-template must contain any sensitive info
-
 deletion_mode: SOFT
 
-database_url: "host=localhost port=5432 user=postgres password=postgres dbname=TODOs sslmode=disable"
+database_url: "postgres://postgres:postgres@localhost:5432/TODOs?sslmode=disable"
 
 sort_fields:
-	- id
-	- title
-	- completed
-	- due_date
-	- created_at
-	- completed_at
-	- assignee
+ - id
+ - title
+ - completed
+ - due_date
+ - created_at
+ - completed_at
+ - assignee	
