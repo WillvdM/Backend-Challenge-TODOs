@@ -47,8 +47,8 @@ func (repo *TodoRepository) GetById(id int) (domain.Todo, error) {
 // Only provided fields are updated.
 // Automatically sets the update_at time to the created_at time upon creation.
 func (repo *TodoRepository) Update(id int, todo domain.Todo) error {
-	setParts := []string{}
-	args := []interface{}{}
+	var setParts []string
+	var args []interface{}
 	argID := 1
 
 	if todo.Title != "" {
@@ -141,7 +141,7 @@ func (repo *TodoRepository) GetExpired() ([]domain.Todo, error) {
 
 	defer rows.Close()
 
-	expired := []domain.Todo{}
+	var expired []domain.Todo
 	for rows.Next() {
 		var todo domain.Todo
 		if err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.DueDate, &todo.CompletedAt, &todo.CreatedAt, &todo.Assignee, &todo.UpdatedAt); err != nil {

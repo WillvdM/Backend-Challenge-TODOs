@@ -69,16 +69,13 @@ func (repo *UserRepository) GetById(id string) (models.User, error) {
 // A time is set that a user must wait before updating their username (24 hours).
 // Returns an error if the user tries to update their username without waiting 24 hours after previous update.
 func (repo *UserRepository) Update(id string, input models.UserInput) error {
-	setParts := []string{}
-	args := []interface{}{}
+	var setParts []string
+	var args []interface{}
 	argID := 1
 
 	var lastUsernameUpdate sql.NullTime
 	err := repo.DB.QueryRow("SELECT updated_at FROM users WHERE id=$1", id).Scan(&lastUsernameUpdate)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return sql.ErrNoRows
-		}
 		return err
 	}
 

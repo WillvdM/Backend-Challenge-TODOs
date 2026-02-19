@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Confgures HTTP routes for the application.
+// SetupRoutes confgures HTTP routes for the application.
 // Each of the routes has a handler function associated that processes requests.
 func SetupRoutes(app *fiber.App, todoRepo *repository.TodoRepository, userRepo *repository.UserRepository) {
 

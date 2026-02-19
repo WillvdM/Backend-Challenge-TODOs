@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 
 	"github.com/WillvdM/Backend-Challenge-TODOs/internal/api/models"
@@ -20,7 +21,7 @@ func NewUserHandler(repo *repository.UserRepository) *UserHandler {
 	return &UserHandler{Repo: repo}
 }
 
-// CreateUsers function adds a single user or multiple user records to the database.
+// The CreateUser function adds a single user or multiple user records to the database.
 // Provides a useful response message if the user was created.
 func (handler *UserHandler) CreateUser(c *fiber.Ctx) error {
 
@@ -38,7 +39,7 @@ func (handler *UserHandler) CreateUser(c *fiber.Ctx) error {
 		})
 	}
 
-	createdIDs := []string{}
+	var createdIDs []string
 
 	for _, user := range input {
 		id, err := handler.Repo.Create(user)
@@ -74,7 +75,7 @@ func (handler *UserHandler) GetUsers(c *fiber.Ctx) error {
 func (handler *UserHandler) GetUserById(c *fiber.Ctx) error {
 	id := c.Params("id")
 	user, err := handler.Repo.GetById(id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found"})
 	} else if err != nil {
@@ -98,7 +99,7 @@ func (handler *UserHandler) UpdateUser(c *fiber.Ctx) error {
 	}
 
 	err := handler.Repo.Update(id, input)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found"})
 	} else if err != nil {
@@ -117,7 +118,7 @@ func (handler *UserHandler) DeleteUser(c *fiber.Ctx) error {
 	id := c.Params("id")
 	err := handler.Repo.Delete(id)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "User not found",
 		})

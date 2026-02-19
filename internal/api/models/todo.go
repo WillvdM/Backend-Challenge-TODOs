@@ -29,8 +29,8 @@ type TodoResponse struct {
 	CompletedAt *string `json:"completed_at,omitempty"`
 }
 
-// TodosResponses represent a paginated list of todos.
-// TodosRespones is used when returning mulitple todos from the API.
+// TodosResponse represents a paginated list of todos.
+// TodosRespone is used when returning mulitple todos from the API.
 type TodosResponse struct {
 	Todos       []TodoResponse `json:"todos"`
 	CurrentPage int            `json:"current_page"`

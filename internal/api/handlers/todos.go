@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"strconv"
@@ -195,7 +196,7 @@ func (todoHandler *TodoHandler) GetTodoByID(c *fiber.Ctx) error {
 	}
 
 	todo, err := todoHandler.Repo.GetById(id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{
 			"error": "TODO not found",
 		})
