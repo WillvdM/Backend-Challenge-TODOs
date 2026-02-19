@@ -1,17 +1,19 @@
-package routes
+package api
 
 import (
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/api/handlers"
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/repository"
+	todoAPI "github.com/WillvdM/Backend-Challenge-TODOs/api/todo"
+	userAPI "github.com/WillvdM/Backend-Challenge-TODOs/api/user"
+	"github.com/WillvdM/Backend-Challenge-TODOs/database/todo"
+	"github.com/WillvdM/Backend-Challenge-TODOs/database/user"
 	"github.com/gofiber/fiber/v2"
 )
 
 // SetupRoutes confgures HTTP routes for the application.
 // Each of the routes has a handler function associated that processes requests.
-func SetupRoutes(app *fiber.App, todoRepo *repository.TodoRepository, userRepo *repository.UserRepository) {
+func SetupRoutes(app *fiber.App, todoRepo *todo.TodoRepository, userRepo *user.UserRepository) {
 
-	todoHandler := handlers.NewTodoHandler(todoRepo)
-	userHandler := handlers.NewUserHandler(userRepo)
+	todoHandler := todoAPI.NewTodoHandler(todoRepo)
+	userHandler := userAPI.NewUserHandler(userRepo)
 
 	// POST /todos (Create todos).
 	app.Post("/todos", todoHandler.CreateTodos)

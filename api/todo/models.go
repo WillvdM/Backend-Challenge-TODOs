@@ -1,4 +1,4 @@
-package models
+package todo
 
 // CreateTodoRequest represents the payload for creating a new TODO item.
 type CreateTodoRequest struct {

@@ -1,11 +1,9 @@
-package repository
+package todo
 
 import (
 	"database/sql"
 	"strconv"
 	"strings"
-
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/domain"
 )
 
 // TodoRepository wraps a sql.DB connection.
@@ -21,7 +19,7 @@ func NewTodoRepository(db *sql.DB) *TodoRepository {
 
 // Create inserts a new TODO into the database.
 // Returns the generated row ID.
-func (repo *TodoRepository) Create(todo domain.Todo) (int, error) {
+func (repo *TodoRepository) Create(todo Todo) (int, error) {
 	var id int
 	err := repo.DB.QueryRow(`
 	INSERT INTO todos (title, completed, assignee, due_date)
@@ -32,8 +30,8 @@ func (repo *TodoRepository) Create(todo domain.Todo) (int, error) {
 }
 
 // GetById retrieves a single TODO by its ID.
-func (repo *TodoRepository) GetById(id int) (domain.Todo, error) {
-	var todo domain.Todo
+func (repo *TodoRepository) GetById(id int) (Todo, error) {
+	var todo Todo
 	err := repo.DB.QueryRow(`
 	SELECT id, title, completed, due_date, completed_at, created_at, assignee, updated_at, deleted_at
 	FROM todos
@@ -46,7 +44,7 @@ func (repo *TodoRepository) GetById(id int) (domain.Todo, error) {
 // Update dynamically updates the fields of a TODO.
 // Only provided fields are updated.
 // Automatically sets the update_at time to the created_at time upon creation.
-func (repo *TodoRepository) Update(id int, todo domain.Todo) error {
+func (repo *TodoRepository) Update(id int, todo Todo) error {
 	var setParts []string
 	var args []interface{}
 	argID := 1
@@ -83,7 +81,6 @@ func (repo *TodoRepository) Update(id int, todo domain.Todo) error {
 
 // Delete deletes a TODO based on the ID provided.
 // If hard is true, perform a permanent delete. Otherwise, perform a soft delete (set deleted_at).
-
 func (repo *TodoRepository) Delete(id int, hard bool) error {
 	if hard {
 		_, err := repo.DB.Exec(`
@@ -102,7 +99,7 @@ func (repo *TodoRepository) Delete(id int, hard bool) error {
 
 // List returns a paginated list of TODOs.
 // Support dynamic sorting the TODOs.
-func (repo *TodoRepository) List(offset, limit int, sortField, order string) ([]domain.Todo, error) {
+func (repo *TodoRepository) List(offset, limit int, sortField, order string) ([]Todo, error) {
 	query := `
 	SELECT id, title, completed, due_date, completed_at, created_at, assignee, updated_at, deleted_at
 	FROM todos
@@ -115,9 +112,9 @@ func (repo *TodoRepository) List(offset, limit int, sortField, order string) ([]
 	}
 	defer rows.Close()
 
-	var todos []domain.Todo
+	var todos []Todo
 	for rows.Next() {
-		var todo domain.Todo
+		var todo Todo
 		if err := rows.Scan(
 			&todo.ID, &todo.Title, &todo.Completed, &todo.DueDate, &todo.CompletedAt, &todo.CreatedAt, &todo.Assignee, &todo.UpdatedAt, &todo.DeletedAt); err != nil {
 			return nil, err
@@ -129,7 +126,7 @@ func (repo *TodoRepository) List(offset, limit int, sortField, order string) ([]
 }
 
 // GetExpired returns TODOs whose due_date has passed, which are not marked as completed.
-func (repo *TodoRepository) GetExpired() ([]domain.Todo, error) {
+func (repo *TodoRepository) GetExpired() ([]Todo, error) {
 	rows, err := repo.DB.Query(`
 	SELECT id, title, completed, due_date, completed_at, created_at, assignee, updated_at
 	FROM todos
@@ -141,9 +138,9 @@ func (repo *TodoRepository) GetExpired() ([]domain.Todo, error) {
 
 	defer rows.Close()
 
-	var expired []domain.Todo
+	var expired []Todo
 	for rows.Next() {
-		var todo domain.Todo
+		var todo Todo
 		if err := rows.Scan(&todo.ID, &todo.Title, &todo.Completed, &todo.DueDate, &todo.CompletedAt, &todo.CreatedAt, &todo.Assignee, &todo.UpdatedAt); err != nil {
 			return nil, err
 		}

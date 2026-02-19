@@ -1,23 +1,22 @@
-package handlers
+package user
 
 import (
 	"database/sql"
 	"errors"
 	"net/http"
 
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/api/models"
-	repository "github.com/WillvdM/Backend-Challenge-TODOs/internal/repository"
+	"github.com/WillvdM/Backend-Challenge-TODOs/database/user"
 	"github.com/gofiber/fiber/v2"
 )
 
 // UserHandler wraps a repository.
 // Separates data access logic from business logic.
 type UserHandler struct {
-	Repo *repository.UserRepository
+	Repo *user.UserRepository
 }
 
 // NewUserHandler constructs a new UserHandler.
-func NewUserHandler(repo *repository.UserRepository) *UserHandler {
+func NewUserHandler(repo *user.UserRepository) *UserHandler {
 	return &UserHandler{Repo: repo}
 }
 
@@ -25,7 +24,7 @@ func NewUserHandler(repo *repository.UserRepository) *UserHandler {
 // Provides a useful response message if the user was created.
 func (handler *UserHandler) CreateUser(c *fiber.Ctx) error {
 
-	var input []models.UserInput
+	var input []user.UserInput
 
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -91,7 +90,7 @@ func (handler *UserHandler) GetUserById(c *fiber.Ctx) error {
 // Provides a useful message if a user has been updated.
 func (handler *UserHandler) UpdateUser(c *fiber.Ctx) error {
 	id := c.Params("id")
-	var input models.UserInput
+	var input user.UserInput
 	if err := c.BodyParser(&input); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",

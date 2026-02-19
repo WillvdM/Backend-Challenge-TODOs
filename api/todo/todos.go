@@ -1,4 +1,4 @@
-package handlers
+package todo
 
 import (
 	"database/sql"
@@ -11,19 +11,18 @@ import (
 	"time"
 
 	"github.com/WillvdM/Backend-Challenge-TODOs/config"
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/api/models"
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/domain"
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/repository"
+	"github.com/WillvdM/Backend-Challenge-TODOs/database/todo"
+
 	"github.com/gofiber/fiber/v2"
 )
 
 // TodoHandler wraps TodoRepository.
 type TodoHandler struct {
-	Repo *repository.TodoRepository
+	Repo *todo.TodoRepository // Changed
 }
 
 // NewTodoHandler constructs a new TodoHandler instance with a repository reference.
-func NewTodoHandler(repo *repository.TodoRepository) *TodoHandler {
+func NewTodoHandler(repo *todo.TodoRepository) *TodoHandler {
 	return &TodoHandler{Repo: repo}
 }
 
@@ -56,7 +55,7 @@ func (todoHandler *TodoHandler) CreateTodos(c *fiber.Ctx) error {
 			}
 			dueDate = &parsed
 		}
-		id, err := todoHandler.Repo.Create(domain.Todo{
+		id, err := todoHandler.Repo.Create(todo.Todo{
 			Title:     input.Title,
 			Completed: &input.Completed,
 			Assignee:  input.Assignee,
@@ -125,7 +124,7 @@ func (todoHandler *TodoHandler) GetTodos(c *fiber.Ctx) error {
 	currentPage := (offset / limit) + 1
 	totalPages := int(math.Ceil(float64(totalCount) / float64(limit)))
 
-	var todoResponses []models.TodoResponse
+	var todoResponses []TodoResponse
 
 	for _, todo := range todos {
 		var dueDateStr *string
@@ -157,7 +156,7 @@ func (todoHandler *TodoHandler) GetTodos(c *fiber.Ctx) error {
 			formatted := todo.CompletedAt.Format("02-01-2006 15:04:05")
 			completedAtStr = &formatted
 		}
-		todoResponses = append(todoResponses, models.TodoResponse{
+		todoResponses = append(todoResponses, TodoResponse{
 			ID:          todo.ID,
 			Title:       todo.Title,
 			Completed:   todo.Completed != nil && *todo.Completed,
@@ -170,7 +169,7 @@ func (todoHandler *TodoHandler) GetTodos(c *fiber.Ctx) error {
 		})
 	}
 
-	response := models.TodosResponse{
+	response := TodosResponse{
 		Todos:       todoResponses,
 		CurrentPage: currentPage,
 		TotalPages:  totalPages,
@@ -273,7 +272,7 @@ func (todoHandler *TodoHandler) UpdateTodo(c *fiber.Ctx) error {
 		dueDate = &parsed
 	}
 
-	todo := domain.Todo{
+	todo := todo.Todo{
 		DueDate: dueDate,
 	}
 

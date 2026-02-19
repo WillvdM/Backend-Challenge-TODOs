@@ -1,4 +1,4 @@
-package repository
+package user
 
 import (
 	"database/sql"
@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/WillvdM/Backend-Challenge-TODOs/internal/api/models"
 )
 
 // UserRepository handles all database operations related to user.
@@ -21,7 +19,7 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 }
 
 // Create inserts a new user in the database.
-func (repo *UserRepository) Create(user models.UserInput) (string, error) {
+func (repo *UserRepository) Create(user UserInput) (string, error) {
 	var id string
 	err := repo.DB.QueryRow(`
 	INSERT INTO users (name, surname, username)
@@ -32,7 +30,7 @@ func (repo *UserRepository) Create(user models.UserInput) (string, error) {
 }
 
 // List gets all users and lists them in JSON format.
-func (repo *UserRepository) List() ([]models.User, error) {
+func (repo *UserRepository) List() ([]User, error) {
 	rows, err := repo.DB.Query(`
 	SELECT id, name, surname, username, created_at, updated_at, deleted_at
 	FROM users
@@ -42,10 +40,10 @@ func (repo *UserRepository) List() ([]models.User, error) {
 	}
 	defer rows.Close()
 
-	var users []models.User
+	var users []User
 
 	for rows.Next() {
-		var user models.User
+		var user User
 		if err := rows.Scan(&user.ID, &user.Name, &user.Surname, &user.Username, &user.CreatedAt, &user.UpdatedAt, &user.DeletedAt); err != nil {
 			return nil, err
 		}
@@ -55,8 +53,8 @@ func (repo *UserRepository) List() ([]models.User, error) {
 }
 
 // GetById retrieves a single user by their ID and returns them in JSON format.
-func (repo *UserRepository) GetById(id string) (models.User, error) {
-	var user models.User
+func (repo *UserRepository) GetById(id string) (User, error) {
+	var user User
 	err := repo.DB.QueryRow(`
 	SELECT id, name, surname, username, created_at, updated_at, deleted_at
 	FROM users
@@ -68,7 +66,7 @@ func (repo *UserRepository) GetById(id string) (models.User, error) {
 // Update allows the provided fields to be udpated by specifying the TODO id.
 // A time is set that a user must wait before updating their username (24 hours).
 // Returns an error if the user tries to update their username without waiting 24 hours after previous update.
-func (repo *UserRepository) Update(id string, input models.UserInput) error {
+func (repo *UserRepository) Update(id string, input UserInput) error {
 	var setParts []string
 	var args []interface{}
 	argID := 1
